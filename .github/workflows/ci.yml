@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Test
+        run: swift test
+      - name: Build iOS
+        run: xcodebuild -scheme Plotline -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+      - name: Build watchOS when the SDK is installed
+        run: |
+          if xcrun --sdk watchos --show-sdk-path >/dev/null 2>&1; then
+            xcodebuild -scheme Plotline -destination 'generic/platform=watchOS' CODE_SIGNING_ALLOWED=NO build
+          else
+            echo "watchOS SDK is not installed on this runner; skipping the experimental platform build."
+          fi

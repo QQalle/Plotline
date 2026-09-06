@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose a capability backed by a concrete graphing use case.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: Use case
+      description: Describe the graph and user problem this would solve.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest reusable capability that would solve it.
+    validations:
+      required: true

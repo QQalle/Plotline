@@ -1,0 +1,23 @@
+name: Bug report
+description: Report reproducible incorrect behavior in Plotline.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: Description
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Reproduction
+      description: Include the smallest scene, sample data, and steps that reproduce the issue.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Environment
+      description: Plotline revision, Swift/Xcode version, OS, and device.
+    validations:
+      required: true
