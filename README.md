@@ -6,18 +6,22 @@ It is being built to replace a mixed WebView and Swift Charts stack in a running
 
 ## Status
 
-Plotline is at the initial scaffold stage and is not ready for production use. The API will change before `0.1.0`.
+Plotline is in active pre-`0.1.0` development and is not ready for production use. The API will change before the first tagged release.
 
 The repository currently provides:
 
 - numeric line, area, and candlestick data models;
-- automatic and explicit numeric domains;
-- normal and reversed scale transforms;
+- automatic, explicit, padded, and viewport numeric domains;
+- normal and reversed scale transforms with forward and inverse lookup;
+- deterministic data normalization, gap preservation, sorting, and duplicate-X policies;
+- adaptive human-readable ticks and measured plot insets;
+- renderer-independent line, area, candle, and annotation geometry;
+- plot-rectangle clipping and extrema-preserving downsampling;
 - a native SwiftUI Canvas renderer;
 - multiple series, gaps, horizontal ranges, and vertical markers;
-- initial unit tests for domains, scales, and scene data.
+- unit tests for domains, scales, ticks, layout, normalization, clipping, downsampling, and geometry.
 
-Scrubbing, selection, adaptive ticks, downsampling, accessibility chart descriptors, deterministic snapshots, and live-update optimization are next.
+Scrubbing, selection, accessibility chart descriptors, deterministic snapshots, and live-update optimization are next.
 
 ## Requirements
 
@@ -80,6 +84,14 @@ struct PaceGraph: View {
 - Native rendering with no WebView or JavaScript bridge.
 - Running-specific concepts remain in the consuming app.
 - Features earn their place through real consumers.
+
+## Architecture
+
+`PlotlineCore` owns all deterministic work: normalization, domains, ticks, layout, transforms, clipping, downsampling, and render geometry. It has no SwiftUI dependency. The `Plotline` module measures labels and turns that core geometry into native Canvas drawing commands.
+
+This separation means annotations and series use the same transform, core behavior can be tested without screenshots, and another renderer can be added without changing graph data.
+
+Input is normalized by ascending X within each explicit gap-delimited segment. Duplicate X values keep the last value by default; callers can choose first, last, or average behavior through `PlotNormalizationOptions`. Invalid numeric values split a line rather than connecting data across the gap. Explicit axis domains are exact, while automatic domains can opt into proportional padding.
 
 See the [roadmap](Documentation.docc/Roadmap.md) for the path to `0.1.0`.
 

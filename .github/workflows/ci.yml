@@ -15,8 +15,10 @@ jobs:
       - uses: actions/checkout@v7
       - name: Toolchain
         run: swift --version
+      - name: Format
+        run: swift format lint --recursive --strict Sources Tests Package.swift
       - name: Test
-        run: swift test
+        run: swift test -Xswiftc -warnings-as-errors
       - name: Build iOS
         run: xcodebuild -scheme Plotline -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
       - name: Build watchOS when the SDK is installed

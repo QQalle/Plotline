@@ -11,6 +11,7 @@ Thanks for helping improve Plotline.
 ## Development
 
 ```sh
+swift format lint --recursive --strict Sources Tests Package.swift
 swift test
 ```
 
