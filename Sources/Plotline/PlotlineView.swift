@@ -4,18 +4,88 @@ import SwiftUI
 public struct PlotlineView: View {
   private let scene: PlotScene
   private let style: PlotlineStyle
+  private let selectionBinding: Binding<PlotSelection?>?
+  private let interaction: PlotlineInteractionConfiguration
+  private let onSelectionChange: ((PlotSelection?) -> Void)?
 
-  public init(scene: PlotScene, style: PlotlineStyle = .standard) {
+  @State private var localSelection: PlotSelection?
+  @State private var latestLayout: PlotLayout?
+
+  public init(
+    scene: PlotScene,
+    style: PlotlineStyle = .standard,
+    interaction: PlotlineInteractionConfiguration = .standard,
+    onSelectionChange: ((PlotSelection?) -> Void)? = nil
+  ) {
     self.scene = scene
     self.style = style
+    self.selectionBinding = nil
+    self.interaction = interaction
+    self.onSelectionChange = onSelectionChange
+    _localSelection = State(initialValue: nil)
+  }
+
+  public init(
+    scene: PlotScene,
+    style: PlotlineStyle = .standard,
+    selection: Binding<PlotSelection?>,
+    interaction: PlotlineInteractionConfiguration = .standard,
+    onSelectionChange: ((PlotSelection?) -> Void)? = nil
+  ) {
+    self.scene = scene
+    self.style = style
+    self.selectionBinding = selection
+    self.interaction = interaction
+    self.onSelectionChange = onSelectionChange
+    _localSelection = State(initialValue: nil)
   }
 
   public var body: some View {
     Canvas { context, size in
       draw(context: &context, size: size)
     }
+    .contentShape(Rectangle())
+    .simultaneousGesture(scrubbingGesture)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(scene.accessibilityLabel)
+    .accessibilityValue(accessibilityMetadata.selectionSummary ?? accessibilityMetadata.summary)
+    .accessibilityHint(accessibilityHint)
+    .accessibilityAdjustableAction { direction in
+      adjustSelection(direction)
+    }
+    .accessibilityChartDescriptor(PlotlineChartDescriptor(scene: scene))
+  }
+
+  private var currentSelection: PlotSelection? {
+    selectionBinding?.wrappedValue ?? localSelection
+  }
+
+  private var accessibilityMetadata: PlotAccessibilityMetadata {
+    PlotAccessibilityBuilder.metadata(for: scene, selection: currentSelection)
+  }
+
+  private var accessibilityHint: String {
+    guard interaction.isEnabled, interaction.allowsAccessibilityAdjustment else {
+      return "Use the audio graph to explore the data"
+    }
+    return "Swipe up or down to inspect adjacent values, or drag across the graph"
+  }
+
+  private var scrubbingGesture: some Gesture {
+    DragGesture(minimumDistance: 0)
+      .onChanged { value in
+        guard interaction.isEnabled, let layout = latestLayout else { return }
+        let isVerticalScroll =
+          abs(value.translation.height) > abs(value.translation.width)
+          && abs(value.translation.height) > 8
+        guard !isVerticalScroll else { return }
+        updateSelection(at: value.location, layout: layout)
+      }
+      .onEnded { _ in
+        if interaction.persistence == .whileInteracting {
+          setSelection(nil)
+        }
+      }
   }
 
   private func draw(context: inout GraphicsContext, size: CGSize) {
@@ -30,14 +100,122 @@ public struct PlotlineView: View {
     }
 
     let geometry = PlotGeometryBuilder.makeGeometry(scene: scene, layout: layout)
+    cache(layout: layout)
     drawGrid(context: &context, layout: layout)
 
     var clipped = context
     clipped.clip(to: Path(layout.transform.plotRect.cgRect))
     drawAnnotations(geometry.annotations, context: &clipped, plot: layout.transform.plotRect)
     drawSeries(geometry.series, context: &clipped)
+    drawSelection(context: &clipped, layout: layout)
 
     drawLabels(context: &context, layout: layout)
+  }
+
+  private func cache(layout: PlotLayout) {
+    guard latestLayout != layout else { return }
+    Task { @MainActor in
+      latestLayout = layout
+    }
+  }
+
+  private func updateSelection(at location: CGPoint, layout: PlotLayout) {
+    let plot = layout.transform.plotRect
+    guard location.y >= plot.minY - 16, location.y <= plot.maxY + 16 else { return }
+    let selection = PlotHitTester.selection(
+      at: PlotCoordinate(x: location.x, y: location.y),
+      scene: scene,
+      layout: layout,
+      options: PlotHitTestOptions(
+        selectionMode: interaction.selectionMode,
+        annotationTolerance: interaction.annotationTolerance
+      )
+    )
+    setSelection(selection)
+  }
+
+  private func setSelection(_ selection: PlotSelection?) {
+    guard currentSelection != selection else { return }
+    if let selectionBinding {
+      selectionBinding.wrappedValue = selection
+    } else {
+      localSelection = selection
+    }
+    onSelectionChange?(selection)
+  }
+
+  private func adjustSelection(_ direction: AccessibilityAdjustmentDirection) {
+    guard interaction.isEnabled, interaction.allowsAccessibilityAdjustment,
+      let layout = latestLayout
+    else { return }
+    let xValues = PlotHitTester.selectableXValues(scene: scene, layout: layout)
+    guard !xValues.isEmpty else { return }
+
+    let currentIndex = currentSelection.flatMap { selection in
+      xValues.indices.min { abs(xValues[$0] - selection.x) < abs(xValues[$1] - selection.x) }
+    }
+    let nextIndex: Int
+    switch direction {
+    case .increment:
+      nextIndex = min((currentIndex ?? -1) + 1, xValues.count - 1)
+    case .decrement:
+      nextIndex = max((currentIndex ?? xValues.count) - 1, 0)
+    @unknown default:
+      return
+    }
+    let options = PlotHitTestOptions(
+      selectionMode: .nearest,
+      annotationTolerance: interaction.annotationTolerance
+    )
+    setSelection(
+      PlotHitTester.selection(
+        atX: xValues[nextIndex], scene: scene, layout: layout, options: options)
+    )
+  }
+
+  private func drawSelection(context: inout GraphicsContext, layout: PlotLayout) {
+    guard let selection = currentSelection else { return }
+    let plot = layout.transform.plotRect
+    let x = layout.transform.xScale.position(for: selection.x)
+    guard x >= plot.minX, x <= plot.maxX else { return }
+
+    var vertical = Path()
+    vertical.move(to: CGPoint(x: x, y: plot.minY))
+    vertical.addLine(to: CGPoint(x: x, y: plot.maxY))
+    context.stroke(
+      vertical,
+      with: .color(style.crosshair),
+      style: StrokeStyle(lineWidth: style.crosshairLineWidth, dash: [4, 3])
+    )
+
+    if let first = selection.values.first {
+      let y = layout.transform.yScale.position(for: first.y)
+      if y >= plot.minY, y <= plot.maxY {
+        var horizontal = Path()
+        horizontal.move(to: CGPoint(x: plot.minX, y: y))
+        horizontal.addLine(to: CGPoint(x: plot.maxX, y: y))
+        context.stroke(
+          horizontal,
+          with: .color(style.crosshair.opacity(0.55)),
+          style: StrokeStyle(lineWidth: style.crosshairLineWidth, dash: [4, 3])
+        )
+      }
+    }
+
+    for (index, value) in selection.values.enumerated() {
+      let coordinate = layout.transform.coordinate(x: value.x, y: value.y)
+      guard let coordinate, plot.contains(coordinate) else { continue }
+      let radius = style.selectionPointRadius
+      let rect = CGRect(
+        x: coordinate.x - radius,
+        y: coordinate.y - radius,
+        width: radius * 2,
+        height: radius * 2
+      )
+      let color = style.palette[index % style.palette.count]
+      context.fill(Path(ellipseIn: rect), with: .color(style.background))
+      context.stroke(Path(ellipseIn: rect), with: .color(color), lineWidth: 2)
+    }
   }
 
   private func makeLayout(context: GraphicsContext, size: CGSize) -> PlotLayout? {

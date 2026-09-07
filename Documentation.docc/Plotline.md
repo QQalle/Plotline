@@ -12,6 +12,9 @@ Plotline separates numeric graph models and layout mathematics from its SwiftUI 
 
 - ``PlotlineView``
 - ``PlotlineStyle``
+- ``PlotlineInteractionConfiguration``
+- ``PlotSelection``
+- ``PlotHitTester``
 
 ### Core engine
 

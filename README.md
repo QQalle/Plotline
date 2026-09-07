@@ -19,9 +19,12 @@ The repository currently provides:
 - plot-rectangle clipping and extrema-preserving downsampling;
 - a native SwiftUI Canvas renderer;
 - multiple series, gaps, horizontal ranges, and vertical markers;
-- unit tests for domains, scales, ticks, layout, normalization, clipping, downsampling, and geometry.
+- deterministic hit testing with nearest and interpolated selection;
+- drag scrubbing, crosshair rendering, optional selection bindings, and callbacks;
+- VoiceOver summaries, adjustable selection, and audio graph descriptors;
+- unit tests for domains, scales, ticks, layout, normalization, clipping, downsampling, geometry, interaction, and accessibility metadata.
 
-Scrubbing, selection, accessibility chart descriptors, deterministic snapshots, and live-update optimization are next.
+Deterministic snapshots and live-update optimization are next.
 
 ## Requirements
 
@@ -49,6 +52,8 @@ import Plotline
 import SwiftUI
 
 struct PaceGraph: View {
+    @State private var selection: PlotSelection?
+
     let scene = PlotScene(
         xAxis: PlotAxis(label: "Distance"),
         yAxis: PlotAxis(label: "Pace", direction: .reversed),
@@ -71,7 +76,13 @@ struct PaceGraph: View {
     )
 
     var body: some View {
-        PlotlineView(scene: scene)
+        PlotlineView(
+            scene: scene,
+            selection: $selection,
+            interaction: PlotlineInteractionConfiguration(persistence: .persistent)
+        ) { selection in
+            // Update a value readout, linked map, or another graph.
+        }
             .frame(height: 280)
     }
 }
@@ -87,7 +98,7 @@ struct PaceGraph: View {
 
 ## Architecture
 
-`PlotlineCore` owns all deterministic work: normalization, domains, ticks, layout, transforms, clipping, downsampling, and render geometry. It has no SwiftUI dependency. The `Plotline` module measures labels and turns that core geometry into native Canvas drawing commands.
+`PlotlineCore` owns all deterministic work: normalization, domains, ticks, layout, transforms, clipping, downsampling, render geometry, hit testing, and accessibility metadata. It has no SwiftUI dependency. The `Plotline` module measures labels, turns core geometry into native Canvas drawing commands, handles scrubbing, and exposes the system accessibility chart descriptor.
 
 This separation means annotations and series use the same transform, core behavior can be tested without screenshots, and another renderer can be added without changing graph data.
 

@@ -14,4 +14,7 @@ The project follows semantic versioning after its first tagged release.
 - Add padded and viewport domains, clamped scale lookup, nice ticks, adaptive label density, measured insets, and reversible plot transforms.
 - Add renderer-independent line, area, candle, and annotation geometry with clipping and extrema-preserving downsampling.
 - Refactor the SwiftUI Canvas renderer to draw core geometry instead of maintaining separate coordinate math.
+- Add viewport-aware nearest and interpolated hit testing, including candles, gaps, and annotations.
+- Add configurable drag scrubbing, crosshair selection, optional binding and callback APIs.
+- Add VoiceOver summaries, adjustable selection, and audio graph metadata through `AXChartDescriptor`.
 - Enforce Swift formatting and warning-free tests in continuous integration.

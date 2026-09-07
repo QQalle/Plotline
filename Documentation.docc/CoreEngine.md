@@ -17,3 +17,9 @@ Normal Y axes use Cartesian presentation, where larger values are higher on scre
 `PlotGeometryBuilder` produces platform-neutral coordinates for every visible layer. Line and area series preserve gaps, large series are downsampled relative to pixel width, output is clipped to the plot rectangle, and annotations use the layout's exact transform.
 
 The SwiftUI module consumes this result and performs drawing only. Consumers that need snapshots or a different graphics backend can use the same layout and geometry types.
+
+## Select values
+
+`PlotHitTester` uses the resolved layout transform, so hit testing and drawing cannot drift into separate coordinate systems. Nearest selection snaps the crosshair to the closest visible X value. Interpolated selection follows the pointer between samples without bridging an explicit gap. Selections contain a formatted-data-independent X value, every selected series value, screen coordinates, selection sources, and matching annotation IDs.
+
+`PlotAccessibilityBuilder` derives stable, platform-neutral summaries from the same normalized scene. The SwiftUI renderer adds adjustable selection and an `AXChartDescriptor`, allowing VoiceOver users to inspect adjacent values and use Apple's audio graph experience.
