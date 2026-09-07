@@ -46,6 +46,7 @@ public struct PlotlineView: View {
     }
     .contentShape(Rectangle())
     .simultaneousGesture(scrubbingGesture)
+    .accessibilityChartDescriptor(PlotlineChartDescriptor(scene: scene))
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(scene.accessibilityLabel)
     .accessibilityValue(accessibilityMetadata.selectionSummary ?? accessibilityMetadata.summary)
@@ -53,7 +54,6 @@ public struct PlotlineView: View {
     .accessibilityAdjustableAction { direction in
       adjustSelection(direction)
     }
-    .accessibilityChartDescriptor(PlotlineChartDescriptor(scene: scene))
   }
 
   private var currentSelection: PlotSelection? {
