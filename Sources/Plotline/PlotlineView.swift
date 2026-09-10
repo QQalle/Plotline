@@ -4,21 +4,25 @@ import SwiftUI
 public struct PlotlineView: View {
   private let scene: PlotScene
   private let style: PlotlineStyle
+  private let isLive: Bool
   private let selectionBinding: Binding<PlotSelection?>?
   private let interaction: PlotlineInteractionConfiguration
   private let onSelectionChange: ((PlotSelection?) -> Void)?
 
   @State private var localSelection: PlotSelection?
   @State private var latestLayout: PlotLayout?
+  @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
   public init(
     scene: PlotScene,
     style: PlotlineStyle = .standard,
+    isLive: Bool = false,
     interaction: PlotlineInteractionConfiguration = .standard,
     onSelectionChange: ((PlotSelection?) -> Void)? = nil
   ) {
     self.scene = scene
     self.style = style
+    self.isLive = isLive
     self.selectionBinding = nil
     self.interaction = interaction
     self.onSelectionChange = onSelectionChange
@@ -28,12 +32,14 @@ public struct PlotlineView: View {
   public init(
     scene: PlotScene,
     style: PlotlineStyle = .standard,
+    isLive: Bool = false,
     selection: Binding<PlotSelection?>,
     interaction: PlotlineInteractionConfiguration = .standard,
     onSelectionChange: ((PlotSelection?) -> Void)? = nil
   ) {
     self.scene = scene
     self.style = style
+    self.isLive = isLive
     self.selectionBinding = selection
     self.interaction = interaction
     self.onSelectionChange = onSelectionChange
@@ -41,15 +47,19 @@ public struct PlotlineView: View {
   }
 
   public var body: some View {
-    Canvas { context, size in
-      draw(context: &context, size: size)
+    TimelineView(
+      .animation(minimumInterval: 1 / 30, paused: !isLive || accessibilityReduceMotion)
+    ) { timeline in
+      Canvas { context, size in
+        draw(context: &context, size: size, date: timeline.date)
+      }
     }
     .contentShape(Rectangle())
     .simultaneousGesture(scrubbingGesture)
     .accessibilityChartDescriptor(PlotlineChartDescriptor(scene: scene))
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(scene.accessibilityLabel)
-    .accessibilityValue(accessibilityMetadata.selectionSummary ?? accessibilityMetadata.summary)
+    .accessibilityValue(accessibilityValue)
     .accessibilityHint(accessibilityHint)
     .accessibilityAdjustableAction { direction in
       adjustSelection(direction)
@@ -62,6 +72,11 @@ public struct PlotlineView: View {
 
   private var accessibilityMetadata: PlotAccessibilityMetadata {
     PlotAccessibilityBuilder.metadata(for: scene, selection: currentSelection)
+  }
+
+  private var accessibilityValue: String {
+    let value = accessibilityMetadata.selectionSummary ?? accessibilityMetadata.summary
+    return isLive ? "Live. \(value)" : value
   }
 
   private var accessibilityHint: String {
@@ -88,7 +103,7 @@ public struct PlotlineView: View {
       }
   }
 
-  private func draw(context: inout GraphicsContext, size: CGSize) {
+  private func draw(context: inout GraphicsContext, size: CGSize, date: Date) {
     let bounds = CGRect(origin: .zero, size: size)
     context.fill(Path(bounds), with: .color(style.background))
 
@@ -107,9 +122,73 @@ public struct PlotlineView: View {
     clipped.clip(to: Path(layout.transform.plotRect.cgRect))
     drawAnnotations(geometry.annotations, context: &clipped, plot: layout.transform.plotRect)
     drawSeries(geometry.series, context: &clipped)
+    drawLiveIndicators(
+      geometry.series,
+      context: &context,
+      phase: livePulsePhase(at: date)
+    )
     drawSelection(context: &clipped, layout: layout)
 
     drawLabels(context: &context, layout: layout)
+  }
+
+  private func drawLiveIndicators(
+    _ series: [PlotResolvedSeriesGeometry],
+    context: inout GraphicsContext,
+    phase: Double
+  ) {
+    guard isLive else { return }
+
+    let indicator = style.liveIndicator
+    let wave = accessibilityReduceMotion ? 1 : (sin(phase * 2 * .pi - .pi / 2) + 1) / 2
+    let glowProgress = accessibilityReduceMotion ? 0.35 : phase
+
+    for (index, item) in series.enumerated() {
+      guard let point = item.endpoint else { continue }
+      let color = style.palette[index % style.palette.count].opacity(item.opacity)
+      let glowRadius =
+        indicator.dotRadius
+        + (indicator.glowRadius - indicator.dotRadius) * (0.55 + 0.45 * glowProgress)
+      let glowOpacity =
+        accessibilityReduceMotion
+        ? indicator.glowOpacity
+        : indicator.glowOpacity * (1 - glowProgress)
+      let glowRect = CGRect(
+        x: point.x - glowRadius,
+        y: point.y - glowRadius,
+        width: glowRadius * 2,
+        height: glowRadius * 2
+      )
+      context.fill(Path(ellipseIn: glowRect), with: .color(color.opacity(glowOpacity)))
+
+      let dotRadius = indicator.dotRadius * (0.9 + 0.1 * wave)
+      let dotRect = CGRect(
+        x: point.x - dotRadius,
+        y: point.y - dotRadius,
+        width: dotRadius * 2,
+        height: dotRadius * 2
+      )
+      context.fill(Path(ellipseIn: dotRect), with: .color(style.background))
+
+      let coreRadius = max(1, dotRadius - 1.25)
+      let coreRect = CGRect(
+        x: point.x - coreRadius,
+        y: point.y - coreRadius,
+        width: coreRadius * 2,
+        height: coreRadius * 2
+      )
+      context.fill(
+        Path(ellipseIn: coreRect),
+        with: .color(color.opacity(0.72 + 0.28 * wave))
+      )
+    }
+  }
+
+  private func livePulsePhase(at date: Date) -> Double {
+    guard !accessibilityReduceMotion else { return 0.35 }
+    return date.timeIntervalSinceReferenceDate
+      .truncatingRemainder(dividingBy: style.liveIndicator.pulseDuration)
+      / style.liveIndicator.pulseDuration
   }
 
   private func cache(layout: PlotLayout) {

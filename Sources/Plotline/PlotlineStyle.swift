@@ -1,5 +1,26 @@
 import SwiftUI
 
+public struct PlotlineLiveIndicatorStyle: Sendable, Hashable {
+  public var dotRadius: Double
+  public var glowRadius: Double
+  public var glowOpacity: Double
+  public var pulseDuration: TimeInterval
+
+  public init(
+    dotRadius: Double = 4,
+    glowRadius: Double = 12,
+    glowOpacity: Double = 0.18,
+    pulseDuration: TimeInterval = 1.4
+  ) {
+    self.dotRadius = dotRadius.isFinite ? max(1, dotRadius) : 4
+    self.glowRadius = glowRadius.isFinite ? max(self.dotRadius, glowRadius) : 12
+    self.glowOpacity = glowOpacity.isFinite ? max(0, min(1, glowOpacity)) : 0.18
+    self.pulseDuration = pulseDuration.isFinite ? max(0.2, pulseDuration) : 1.4
+  }
+
+  public static let standard = PlotlineLiveIndicatorStyle()
+}
+
 @MainActor
 public struct PlotlineStyle {
   public var background: Color
@@ -15,6 +36,7 @@ public struct PlotlineStyle {
   public var selectionPointRadius: Double
   public var crosshairLineWidth: Double
   public var areaOpacity: Double
+  public var liveIndicator: PlotlineLiveIndicatorStyle
 
   public init(
     background: Color = Color(.sRGB, white: 0.98, opacity: 1),
@@ -29,7 +51,8 @@ public struct PlotlineStyle {
     pointRadius: Double = 3,
     selectionPointRadius: Double = 4,
     crosshairLineWidth: Double = 1,
-    areaOpacity: Double = 0.2
+    areaOpacity: Double = 0.2,
+    liveIndicator: PlotlineLiveIndicatorStyle = .standard
   ) {
     self.background = background
     self.grid = grid
@@ -44,6 +67,7 @@ public struct PlotlineStyle {
     self.selectionPointRadius = max(1, selectionPointRadius)
     self.crosshairLineWidth = max(0.5, crosshairLineWidth)
     self.areaOpacity = max(0, min(1, areaOpacity))
+    self.liveIndicator = liveIndicator
   }
 
   public static let standard = PlotlineStyle()

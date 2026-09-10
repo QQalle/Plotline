@@ -70,6 +70,10 @@ final class PlotGeometryTests: XCTestCase {
       return XCTFail("Expected line geometry")
     }
     XCTAssertEqual(line.segments.count, 2)
+    XCTAssertEqual(
+      geometry.series[0].endpoint,
+      layout.transform.coordinate(x: 10, y: 9)
+    )
 
     guard case .xRange(_, let minX, let maxX, _) = geometry.annotations[0],
       case .xMarker(_, let markerX, _) = geometry.annotations[1]
@@ -79,6 +83,37 @@ final class PlotGeometryTests: XCTestCase {
     XCTAssertEqual(minX, layout.transform.xScale.position(for: 2), accuracy: 0.000_001)
     XCTAssertEqual(maxX, layout.transform.xScale.position(for: 4), accuracy: 0.000_001)
     XCTAssertEqual(markerX, layout.transform.xScale.position(for: 6), accuracy: 0.000_001)
+  }
+
+  func testEndpointUsesLastFiniteVisibleSampleAndSkipsCandles() throws {
+    let domain = try XCTUnwrap(PlotDomain(lowerBound: 0, upperBound: 10))
+    let scene = PlotScene(
+      xAxis: PlotAxis(domain: domain),
+      yAxis: PlotAxis(domain: domain),
+      series: [
+        PlotSeries(
+          id: "line",
+          name: "Line",
+          data: .line([
+            PlotSample(x: 2, y: 3),
+            PlotSample(x: 8, y: 7),
+            PlotSample(x: 9, y: nil),
+          ])
+        ),
+        PlotSeries(
+          id: "candles",
+          name: "Candles",
+          data: .candles([PlotCandle(x: 5, open: 4, high: 6, low: 3, close: 5)])
+        ),
+      ]
+    )
+    let layout = try XCTUnwrap(
+      PlotLayoutEngine.makeLayout(scene: scene, size: PlotSize(width: 300, height: 200))
+    )
+    let geometry = PlotGeometryBuilder.makeGeometry(scene: scene, layout: layout)
+
+    XCTAssertEqual(geometry.series[0].endpoint, layout.transform.coordinate(x: 8, y: 7))
+    XCTAssertNil(geometry.series[1].endpoint)
   }
 
   func testAreaCrossingVisibleDomainStillProducesClippedFill() throws {

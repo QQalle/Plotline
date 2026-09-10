@@ -78,6 +78,7 @@ struct PaceGraph: View {
     var body: some View {
         PlotlineView(
             scene: scene,
+            isLive: true,
             selection: $selection,
             interaction: PlotlineInteractionConfiguration(persistence: .persistent)
         ) { selection in
@@ -87,6 +88,11 @@ struct PaceGraph: View {
     }
 }
 ```
+
+Set `isLive` to `true` to draw a pulsing dot and faint glow at the latest visible
+point in each line or area series. The indicator becomes static when Reduce Motion
+is enabled. Its size, glow, and pulse timing can be customized with
+`PlotlineLiveIndicatorStyle` through `PlotlineStyle.liveIndicator`.
 
 ## Design principles
 

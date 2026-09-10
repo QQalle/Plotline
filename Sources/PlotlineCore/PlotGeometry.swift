@@ -57,12 +57,20 @@ public struct PlotResolvedSeriesGeometry: Identifiable, Sendable, Hashable {
   public let name: String
   public let opacity: Double
   public let shape: PlotSeriesShape
+  public let endpoint: PlotCoordinate?
 
-  public init(id: String, name: String, opacity: Double, shape: PlotSeriesShape) {
+  public init(
+    id: String,
+    name: String,
+    opacity: Double,
+    shape: PlotSeriesShape,
+    endpoint: PlotCoordinate? = nil
+  ) {
     self.id = id
     self.name = name
     self.opacity = opacity
     self.shape = shape
+    self.endpoint = endpoint
   }
 }
 
@@ -128,6 +136,7 @@ public enum PlotGeometryBuilder {
       collapsedDuplicateCount += normalization.collapsedDuplicateCount
       let normalized = normalization.series
       let shape: PlotSeriesShape
+      let resolvedEndpoint: PlotCoordinate?
 
       switch normalized.data {
       case .line(let samples):
@@ -137,6 +146,7 @@ public enum PlotGeometryBuilder {
             transform: layout.transform,
             targetCount: targetCount
           ))
+        resolvedEndpoint = endpoint(samples: samples, transform: layout.transform)
 
       case .area(let samples, let baseline):
         shape = .area(
@@ -146,9 +156,11 @@ public enum PlotGeometryBuilder {
             transform: layout.transform,
             targetCount: targetCount
           ))
+        resolvedEndpoint = endpoint(samples: samples, transform: layout.transform)
 
       case .candles(let candles):
         shape = .candles(candleGeometry(candles: candles, transform: layout.transform))
+        resolvedEndpoint = nil
       }
 
       resolved.append(
@@ -156,7 +168,8 @@ public enum PlotGeometryBuilder {
           id: normalized.id,
           name: normalized.name,
           opacity: normalized.opacity,
-          shape: shape
+          shape: shape,
+          endpoint: resolvedEndpoint
         ))
     }
 
@@ -166,6 +179,20 @@ public enum PlotGeometryBuilder {
       droppedValueCount: droppedValueCount,
       collapsedDuplicateCount: collapsedDuplicateCount
     )
+  }
+
+  private static func endpoint(
+    samples: [PlotSample],
+    transform: PlotTransform
+  ) -> PlotCoordinate? {
+    guard let sample = samples.last(where: \.isFinitePoint),
+      let y = sample.y,
+      transform.xScale.domain.contains(sample.x),
+      transform.yScale.domain.contains(y)
+    else {
+      return nil
+    }
+    return transform.coordinate(x: sample.x, y: y)
   }
 
   private static func lineGeometry(

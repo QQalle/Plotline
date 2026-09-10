@@ -24,4 +24,20 @@ final class PlotlineTests: XCTestCase {
 
     XCTAssertNotNil(view.body)
   }
+
+  @MainActor
+  func testLiveInitializerBuildsView() {
+    let scene = PlotScene(
+      series: [
+        PlotSeries(
+          id: "line",
+          name: "Line",
+          data: .line([PlotSample(x: 0, y: 1), PlotSample(x: 1, y: 2)])
+        )
+      ]
+    )
+    let view = PlotlineView(scene: scene, isLive: true)
+
+    XCTAssertNotNil(view.body)
+  }
 }
