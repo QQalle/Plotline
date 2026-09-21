@@ -160,6 +160,12 @@ public enum PlotAccessibilityBuilder {
     if annotationCount > 0 {
       components.append("\(annotationCount) \(annotationCount == 1 ? "annotation" : "annotations")")
     }
+    if !scene.zones.isEmpty {
+      components.append(
+        "\(scene.zones.count) \(scene.zones.count == 1 ? "zone" : "zones"): "
+          + scene.zones.map(\.label).joined(separator: ", ")
+      )
+    }
     return components.joined(separator: ", ")
   }
 

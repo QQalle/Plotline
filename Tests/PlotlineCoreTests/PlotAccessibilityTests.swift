@@ -50,4 +50,16 @@ final class PlotAccessibilityTests: XCTestCase {
 
     XCTAssertEqual(metadata.selectionSummary, "x=2, Effort y=7")
   }
+
+  func testSummaryNamesSemanticZones() throws {
+    let zone = try XCTUnwrap(PlotZone(id: "z1", label: "Z1", upperBound: 120))
+    let scene = PlotScene(
+      series: [
+        PlotSeries(id: "heart-rate", name: "Heart rate", data: .line([PlotSample(x: 0, y: 110)]))
+      ],
+      zones: [zone]
+    )
+
+    XCTAssertTrue(PlotAccessibilityBuilder.metadata(for: scene).summary.contains("1 zone: Z1"))
+  }
 }

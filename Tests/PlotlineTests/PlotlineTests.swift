@@ -40,4 +40,30 @@ final class PlotlineTests: XCTestCase {
 
     XCTAssertNotNil(view.body)
   }
+
+  @MainActor
+  func testZoneStyleAndMinimalGridBuildView() throws {
+    let zone = try XCTUnwrap(
+      PlotZone(id: "z1", label: "Z1", lowerBound: nil, upperBound: 120))
+    let scene = PlotScene(
+      series: [
+        PlotSeries(
+          id: "heart-rate",
+          name: "Heart rate",
+          data: .line([PlotSample(x: 0, y: 100), PlotSample(x: 1, y: 115)])
+        )
+      ],
+      zones: [zone]
+    )
+    let style = PlotlineStyle(
+      zoneColors: ["z1": .blue],
+      gridVisibility: .none,
+      yAxisPosition: .trailing,
+      showsYAxisLabels: false,
+      showsAxisTitles: false,
+      showsZoneBoundaryLabels: true
+    )
+
+    XCTAssertNotNil(PlotlineView(scene: scene, style: style).body)
+  }
 }

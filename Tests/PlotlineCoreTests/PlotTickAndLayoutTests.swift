@@ -3,6 +3,18 @@ import XCTest
 @testable import PlotlineCore
 
 final class PlotTickAndLayoutTests: XCTestCase {
+  func testTrailingYAxisReservesSpaceOnTrailingEdge() {
+    let metrics = PlotLayoutMetrics(
+      maximumYAxisLabelWidth: 32,
+      outerPadding: 10,
+      labelSpacing: 6,
+      yAxisPosition: .trailing
+    )
+
+    XCTAssertEqual(metrics.insets().leading, 10)
+    XCTAssertEqual(metrics.insets().trailing, 48)
+  }
+
   func testNiceTicksUseReadableSteps() throws {
     let domain = try XCTUnwrap(PlotDomain(lowerBound: 3, upperBound: 97))
 

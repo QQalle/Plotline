@@ -1,5 +1,24 @@
 import SwiftUI
 
+public struct PlotlineGridVisibility: OptionSet, Sendable, Hashable {
+  public let rawValue: UInt8
+
+  public init(rawValue: UInt8) {
+    self.rawValue = rawValue
+  }
+
+  public static let horizontal = PlotlineGridVisibility(rawValue: 1 << 0)
+  public static let vertical = PlotlineGridVisibility(rawValue: 1 << 1)
+  public static let border = PlotlineGridVisibility(rawValue: 1 << 2)
+  public static let all: PlotlineGridVisibility = [.horizontal, .vertical, .border]
+  public static let none: PlotlineGridVisibility = []
+}
+
+public enum PlotlineYAxisPosition: Sendable, Hashable {
+  case leading
+  case trailing
+}
+
 public struct PlotlineLiveIndicatorStyle: Sendable, Hashable {
   public var dotRadius: Double
   public var glowRadius: Double
@@ -29,6 +48,7 @@ public struct PlotlineStyle {
   public var annotation: Color
   public var crosshair: Color
   public var palette: [Color]
+  public var zoneColors: [String: Color]
   public var risingCandle: Color
   public var fallingCandle: Color
   public var lineWidth: Double
@@ -36,6 +56,15 @@ public struct PlotlineStyle {
   public var selectionPointRadius: Double
   public var crosshairLineWidth: Double
   public var areaOpacity: Double
+  public var gridVisibility: PlotlineGridVisibility
+  public var yAxisPosition: PlotlineYAxisPosition
+  public var showsXAxisLabels: Bool
+  public var showsYAxisLabels: Bool
+  public var showsAxisTitles: Bool
+  public var showsZoneBoundaryLabels: Bool
+  public var zoneBoundaryLineWidth: Double
+  public var zoneBoundaryDash: [CGFloat]
+  public var zoneBoundaryOpacity: Double
   public var liveIndicator: PlotlineLiveIndicatorStyle
 
   public init(
@@ -45,6 +74,7 @@ public struct PlotlineStyle {
     annotation: Color = Color.accentColor,
     crosshair: Color = Color.primary.opacity(0.65),
     palette: [Color] = [.green, .blue, .orange, .purple, .pink],
+    zoneColors: [String: Color] = [:],
     risingCandle: Color = .green,
     fallingCandle: Color = .red,
     lineWidth: Double = 2.5,
@@ -52,6 +82,15 @@ public struct PlotlineStyle {
     selectionPointRadius: Double = 4,
     crosshairLineWidth: Double = 1,
     areaOpacity: Double = 0.2,
+    gridVisibility: PlotlineGridVisibility = .all,
+    yAxisPosition: PlotlineYAxisPosition = .leading,
+    showsXAxisLabels: Bool = true,
+    showsYAxisLabels: Bool = true,
+    showsAxisTitles: Bool = true,
+    showsZoneBoundaryLabels: Bool = false,
+    zoneBoundaryLineWidth: Double = 1.5,
+    zoneBoundaryDash: [CGFloat] = [1, 5],
+    zoneBoundaryOpacity: Double = 0.8,
     liveIndicator: PlotlineLiveIndicatorStyle = .standard
   ) {
     self.background = background
@@ -60,6 +99,7 @@ public struct PlotlineStyle {
     self.annotation = annotation
     self.crosshair = crosshair
     self.palette = palette.isEmpty ? [.primary] : palette
+    self.zoneColors = zoneColors
     self.risingCandle = risingCandle
     self.fallingCandle = fallingCandle
     self.lineWidth = max(0.5, lineWidth)
@@ -67,6 +107,15 @@ public struct PlotlineStyle {
     self.selectionPointRadius = max(1, selectionPointRadius)
     self.crosshairLineWidth = max(0.5, crosshairLineWidth)
     self.areaOpacity = max(0, min(1, areaOpacity))
+    self.gridVisibility = gridVisibility
+    self.yAxisPosition = yAxisPosition
+    self.showsXAxisLabels = showsXAxisLabels
+    self.showsYAxisLabels = showsYAxisLabels
+    self.showsAxisTitles = showsAxisTitles
+    self.showsZoneBoundaryLabels = showsZoneBoundaryLabels
+    self.zoneBoundaryLineWidth = max(0.5, zoneBoundaryLineWidth)
+    self.zoneBoundaryDash = zoneBoundaryDash.filter { $0.isFinite && $0 >= 0 }
+    self.zoneBoundaryOpacity = max(0, min(1, zoneBoundaryOpacity))
     self.liveIndicator = liveIndicator
   }
 

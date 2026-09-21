@@ -121,10 +121,12 @@ public struct PlotlineView: View {
     var clipped = context
     clipped.clip(to: Path(layout.transform.plotRect.cgRect))
     drawAnnotations(geometry.annotations, context: &clipped, plot: layout.transform.plotRect)
-    drawSeries(geometry.series, context: &clipped)
+    drawZoneBoundaries(context: &clipped, layout: layout)
+    drawSeries(geometry.series, context: &clipped, layout: layout)
     drawLiveIndicators(
       geometry.series,
       context: &context,
+      layout: layout,
       phase: livePulsePhase(at: date)
     )
     drawSelection(context: &clipped, layout: layout)
@@ -135,6 +137,7 @@ public struct PlotlineView: View {
   private func drawLiveIndicators(
     _ series: [PlotResolvedSeriesGeometry],
     context: inout GraphicsContext,
+    layout: PlotLayout,
     phase: Double
   ) {
     guard isLive else { return }
@@ -145,7 +148,9 @@ public struct PlotlineView: View {
 
     for (index, item) in series.enumerated() {
       guard let point = item.endpoint else { continue }
-      let color = style.palette[index % style.palette.count].opacity(item.opacity)
+      let fallback = style.palette[index % style.palette.count]
+      let value = layout.transform.yScale.value(at: point.y, clamped: true)
+      let color = zoneColor(for: value) ?? fallback
       let glowRadius =
         indicator.dotRadius
         + (indicator.glowRadius - indicator.dotRadius) * (0.55 + 0.45 * glowProgress)
@@ -291,7 +296,8 @@ public struct PlotlineView: View {
         width: radius * 2,
         height: radius * 2
       )
-      let color = style.palette[index % style.palette.count]
+      let fallback = style.palette[index % style.palette.count]
+      let color = zoneColor(for: value.y) ?? fallback
       context.fill(Path(ellipseIn: rect), with: .color(style.background))
       context.stroke(Path(ellipseIn: rect), with: .color(color), lineWidth: 2)
     }
@@ -303,12 +309,21 @@ public struct PlotlineView: View {
     }
     let xTicks = PlotTickGenerator.ticks(for: xDomain, axis: scene.xAxis)
     let yTicks = PlotTickGenerator.ticks(for: yDomain, axis: scene.yAxis)
-    let xSizes = xTicks.map { measuredSize(of: $0.label, context: context) }
-    let ySizes = yTicks.map { measuredSize(of: $0.label, context: context) }
+    let xSizes = style.showsXAxisLabels
+      ? xTicks.map { measuredSize(of: $0.label, context: context) }
+      : []
+    let yLabelValues =
+      (style.showsYAxisLabels ? yTicks.map(\.value) : [])
+      + (style.showsZoneBoundaryLabels ? zoneBoundaries.map(\.value) : [])
+    let ySizes = yLabelValues.map {
+      measuredSize(of: scene.yAxis.formatter($0), context: context)
+    }
     let titleHeight =
-      scene.xAxis.label.isEmpty ? 0 : measuredSize(of: scene.xAxis.label, context: context).height
+      !style.showsAxisTitles || scene.xAxis.label.isEmpty
+      ? 0 : measuredSize(of: scene.xAxis.label, context: context).height
     let yTitleHeight =
-      scene.yAxis.label.isEmpty ? 0 : measuredSize(of: scene.yAxis.label, context: context).height
+      !style.showsAxisTitles || scene.yAxis.label.isEmpty
+      ? 0 : measuredSize(of: scene.yAxis.label, context: context).height
 
     let metrics = PlotLayoutMetrics(
       maximumYAxisLabelWidth: Double(ySizes.map(\.width).max() ?? 0),
@@ -318,7 +333,8 @@ public struct PlotlineView: View {
       xAxisTitleHeight: Double(titleHeight),
       yAxisTitleHeight: Double(yTitleHeight),
       outerPadding: 10,
-      labelSpacing: 6
+      labelSpacing: 6,
+      yAxisPosition: style.yAxisPosition == .leading ? .leading : .trailing
     )
     return PlotLayoutEngine.makeLayout(
       scene: scene,
@@ -330,23 +346,48 @@ public struct PlotlineView: View {
   private func drawGrid(context: inout GraphicsContext, layout: PlotLayout) {
     let plot = layout.transform.plotRect
 
-    for tick in layout.xTicks {
-      let x = layout.transform.xScale.position(for: tick.value)
-      var path = Path()
-      path.move(to: CGPoint(x: x, y: plot.minY))
-      path.addLine(to: CGPoint(x: x, y: plot.maxY))
-      context.stroke(path, with: .color(style.grid), lineWidth: 1)
+    if style.gridVisibility.contains(.vertical) {
+      for tick in layout.xTicks {
+        let x = layout.transform.xScale.position(for: tick.value)
+        var path = Path()
+        path.move(to: CGPoint(x: x, y: plot.minY))
+        path.addLine(to: CGPoint(x: x, y: plot.maxY))
+        context.stroke(path, with: .color(style.grid), lineWidth: 1)
+      }
     }
 
-    for tick in layout.yTicks {
-      let y = layout.transform.yScale.position(for: tick.value)
+    if style.gridVisibility.contains(.horizontal) {
+      for tick in layout.yTicks {
+        let y = layout.transform.yScale.position(for: tick.value)
+        var path = Path()
+        path.move(to: CGPoint(x: plot.minX, y: y))
+        path.addLine(to: CGPoint(x: plot.maxX, y: y))
+        context.stroke(path, with: .color(style.grid), lineWidth: 1)
+      }
+    }
+
+    if style.gridVisibility.contains(.border) {
+      context.stroke(Path(plot.cgRect), with: .color(style.grid), lineWidth: 1)
+    }
+  }
+
+  private func drawZoneBoundaries(context: inout GraphicsContext, layout: PlotLayout) {
+    let plot = layout.transform.plotRect
+    for boundary in zoneBoundaries where layout.transform.yScale.domain.contains(boundary.value) {
+      let y = layout.transform.yScale.position(for: boundary.value)
       var path = Path()
       path.move(to: CGPoint(x: plot.minX, y: y))
       path.addLine(to: CGPoint(x: plot.maxX, y: y))
-      context.stroke(path, with: .color(style.grid), lineWidth: 1)
+      context.stroke(
+        path,
+        with: .color(boundary.color.opacity(style.zoneBoundaryOpacity)),
+        style: StrokeStyle(
+          lineWidth: style.zoneBoundaryLineWidth,
+          lineCap: .round,
+          dash: style.zoneBoundaryDash
+        )
+      )
     }
-
-    context.stroke(Path(plot.cgRect), with: .color(style.grid), lineWidth: 1)
   }
 
   private func drawAnnotations(
@@ -371,24 +412,63 @@ public struct PlotlineView: View {
 
   private func drawSeries(
     _ series: [PlotResolvedSeriesGeometry],
-    context: inout GraphicsContext
+    context: inout GraphicsContext,
+    layout: PlotLayout
   ) {
     for (index, item) in series.enumerated() {
       let color = style.palette[index % style.palette.count].opacity(item.opacity)
       switch item.shape {
       case .line(let line):
         drawLine(line, context: &context, color: color)
+        drawZonedLine(line, opacity: item.opacity, context: &context, layout: layout)
 
       case .area(let area):
-        for polygon in area.polygons {
-          guard let path = closedPath(points: polygon) else { continue }
-          context.fill(path, with: .color(color.opacity(style.areaOpacity)))
-        }
-        drawLine(area.line, context: &context, color: color)
+        drawArea(area, context: &context, color: color)
+        drawZonedArea(area, opacity: item.opacity, context: &context, layout: layout)
 
       case .candles(let candles):
-        drawCandles(candles, opacity: item.opacity, context: &context)
+        drawCandles(candles, opacity: item.opacity, context: &context, layout: layout)
       }
+    }
+  }
+
+  private func drawArea(
+    _ area: PlotAreaGeometry,
+    context: inout GraphicsContext,
+    color: Color
+  ) {
+    for polygon in area.polygons {
+      guard let path = closedPath(points: polygon) else { continue }
+      context.fill(path, with: .color(color.opacity(style.areaOpacity)))
+    }
+    drawLine(area.line, context: &context, color: color)
+  }
+
+  private func drawZonedLine(
+    _ line: PlotLineGeometry,
+    opacity: Double,
+    context: inout GraphicsContext,
+    layout: PlotLayout
+  ) {
+    for zone in styledZones {
+      guard let rect = zoneRect(zone.zone, layout: layout) else { continue }
+      var zoned = context
+      zoned.clip(to: Path(rect))
+      drawLine(line, context: &zoned, color: zone.color.opacity(opacity))
+    }
+  }
+
+  private func drawZonedArea(
+    _ area: PlotAreaGeometry,
+    opacity: Double,
+    context: inout GraphicsContext,
+    layout: PlotLayout
+  ) {
+    for zone in styledZones {
+      guard let rect = zoneRect(zone.zone, layout: layout) else { continue }
+      var zoned = context
+      zoned.clip(to: Path(rect))
+      drawArea(area, context: &zoned, color: zone.color.opacity(opacity))
     }
   }
 
@@ -421,10 +501,13 @@ public struct PlotlineView: View {
   private func drawCandles(
     _ candles: [PlotCandleGeometry],
     opacity: Double,
-    context: inout GraphicsContext
+    context: inout GraphicsContext,
+    layout: PlotLayout
   ) {
     for candle in candles {
-      let color = (candle.isRising ? style.risingCandle : style.fallingCandle).opacity(opacity)
+      let fallback = candle.isRising ? style.risingCandle : style.fallingCandle
+      let close = layout.transform.yScale.value(at: candle.closeY, clamped: true)
+      let color = (zoneColor(for: close) ?? fallback).opacity(opacity)
       var wick = Path()
       wick.move(to: CGPoint(x: candle.x, y: candle.highY))
       wick.addLine(to: CGPoint(x: candle.x, y: candle.lowY))
@@ -443,25 +526,35 @@ public struct PlotlineView: View {
   private func drawLabels(context: inout GraphicsContext, layout: PlotLayout) {
     let plot = layout.transform.plotRect
 
-    for tick in layout.xTicks {
-      let x = layout.transform.xScale.position(for: tick.value)
-      context.draw(
-        axisText(tick.label),
-        at: CGPoint(x: x, y: plot.maxY + 6),
-        anchor: .top
-      )
+    if style.showsXAxisLabels {
+      for tick in layout.xTicks {
+        let x = layout.transform.xScale.position(for: tick.value)
+        context.draw(
+          axisText(tick.label),
+          at: CGPoint(x: x, y: plot.maxY + 6),
+          anchor: .top
+        )
+      }
     }
 
-    for tick in layout.yTicks {
-      let y = layout.transform.yScale.position(for: tick.value)
-      context.draw(
-        axisText(tick.label),
-        at: CGPoint(x: plot.minX - 6, y: y),
-        anchor: .trailing
-      )
+    if style.showsYAxisLabels {
+      for tick in layout.yTicks {
+        drawYAxisLabel(tick.label, y: layout.transform.yScale.position(for: tick.value), context: &context, plot: plot)
+      }
     }
 
-    if !scene.xAxis.label.isEmpty {
+    if style.showsZoneBoundaryLabels {
+      for boundary in zoneBoundaries where layout.transform.yScale.domain.contains(boundary.value) {
+        drawYAxisLabel(
+          scene.yAxis.formatter(boundary.value),
+          y: layout.transform.yScale.position(for: boundary.value),
+          context: &context,
+          plot: plot
+        )
+      }
+    }
+
+    if style.showsAxisTitles, !scene.xAxis.label.isEmpty {
       context.draw(
         axisTitle(scene.xAxis.label),
         at: CGPoint(x: plot.midX, y: layout.size.height - 2),
@@ -469,13 +562,72 @@ public struct PlotlineView: View {
       )
     }
 
-    if !scene.yAxis.label.isEmpty {
+    if style.showsAxisTitles, !scene.yAxis.label.isEmpty {
+      let x = style.yAxisPosition == .leading ? plot.minX : plot.maxX
       context.draw(
         axisTitle(scene.yAxis.label),
-        at: CGPoint(x: plot.minX, y: 2),
-        anchor: .topLeading
+        at: CGPoint(x: x, y: 2),
+        anchor: style.yAxisPosition == .leading ? .topLeading : .topTrailing
       )
     }
+  }
+
+  private func drawYAxisLabel(
+    _ label: String,
+    y: Double,
+    context: inout GraphicsContext,
+    plot: PlotRect
+  ) {
+    let isLeading = style.yAxisPosition == .leading
+    context.draw(
+      axisText(label),
+      at: CGPoint(x: isLeading ? plot.minX - 6 : plot.maxX + 6, y: y),
+      anchor: isLeading ? .trailing : .leading
+    )
+  }
+
+  private struct StyledZone {
+    let zone: PlotZone
+    let color: Color
+  }
+
+  private struct ZoneBoundary {
+    let value: Double
+    let color: Color
+  }
+
+  private var styledZones: [StyledZone] {
+    scene.zones.compactMap { zone in
+      style.zoneColors[zone.id].map { StyledZone(zone: zone, color: $0) }
+    }
+    .sorted { ($0.zone.lowerBound ?? -.greatestFiniteMagnitude) < ($1.zone.lowerBound ?? -.greatestFiniteMagnitude) }
+  }
+
+  private var zoneBoundaries: [ZoneBoundary] {
+    var seen: Set<Double> = []
+    return styledZones.compactMap { item in
+      guard let value = item.zone.lowerBound, seen.insert(value).inserted else { return nil }
+      return ZoneBoundary(value: value, color: item.color)
+    }
+  }
+
+  private func zoneColor(for value: Double) -> Color? {
+    styledZones.reversed().first { $0.zone.contains(value) }?.color
+  }
+
+  private func zoneRect(_ zone: PlotZone, layout: PlotLayout) -> CGRect? {
+    let domain = layout.transform.yScale.domain
+    let lower = max(zone.lowerBound ?? domain.lowerBound, domain.lowerBound)
+    let upper = min(zone.upperBound ?? domain.upperBound, domain.upperBound)
+    guard lower <= upper else { return nil }
+    let lowerY = layout.transform.yScale.position(for: lower)
+    let upperY = layout.transform.yScale.position(for: upper)
+    return CGRect(
+      x: layout.transform.plotRect.minX,
+      y: min(lowerY, upperY),
+      width: layout.transform.plotRect.width,
+      height: max(1, abs(upperY - lowerY))
+    )
   }
 
   private func measuredSize(of label: String, context: GraphicsContext) -> CGSize {

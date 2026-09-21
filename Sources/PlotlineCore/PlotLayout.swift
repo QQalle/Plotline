@@ -66,6 +66,11 @@ public struct PlotDataValue: Sendable, Hashable {
 }
 
 public struct PlotLayoutMetrics: Sendable, Hashable {
+  public enum YAxisPosition: Sendable, Hashable {
+    case leading
+    case trailing
+  }
+
   public var maximumYAxisLabelWidth: Double
   public var maximumYAxisLabelHeight: Double
   public var maximumXAxisLabelHeight: Double
@@ -74,6 +79,7 @@ public struct PlotLayoutMetrics: Sendable, Hashable {
   public var yAxisTitleHeight: Double
   public var outerPadding: Double
   public var labelSpacing: Double
+  public var yAxisPosition: YAxisPosition
 
   public init(
     maximumYAxisLabelWidth: Double = 32,
@@ -83,7 +89,8 @@ public struct PlotLayoutMetrics: Sendable, Hashable {
     xAxisTitleHeight: Double = 0,
     yAxisTitleHeight: Double = 0,
     outerPadding: Double = 10,
-    labelSpacing: Double = 6
+    labelSpacing: Double = 6,
+    yAxisPosition: YAxisPosition = .leading
   ) {
     self.maximumYAxisLabelWidth = finiteNonnegative(maximumYAxisLabelWidth)
     self.maximumYAxisLabelHeight = finiteNonnegative(maximumYAxisLabelHeight)
@@ -93,14 +100,16 @@ public struct PlotLayoutMetrics: Sendable, Hashable {
     self.yAxisTitleHeight = finiteNonnegative(yAxisTitleHeight)
     self.outerPadding = finiteNonnegative(outerPadding)
     self.labelSpacing = finiteNonnegative(labelSpacing)
+    self.yAxisPosition = yAxisPosition
   }
 
   public func insets() -> PlotInsets {
-    PlotInsets(
+    let yAxisInset = maximumYAxisLabelWidth + labelSpacing
+    return PlotInsets(
       top: outerPadding + yAxisTitleHeight + (yAxisTitleHeight > 0 ? labelSpacing : 0),
-      leading: outerPadding + maximumYAxisLabelWidth + labelSpacing,
+      leading: outerPadding + (yAxisPosition == .leading ? yAxisInset : 0),
       bottom: outerPadding + maximumXAxisLabelHeight + xAxisTitleHeight + labelSpacing,
-      trailing: outerPadding
+      trailing: outerPadding + (yAxisPosition == .trailing ? yAxisInset : 0)
     )
   }
 }

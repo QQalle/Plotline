@@ -108,6 +108,39 @@ public struct PlotSeries: Identifiable, Sendable, Hashable {
   }
 }
 
+/// A semantic band on the Y axis, such as a heart-rate or power zone.
+///
+/// Use `nil` for an open lower or upper bound. Plotline keeps zones numeric and
+/// domain-neutral; render colors are supplied by `PlotlineStyle` in the SwiftUI
+/// module.
+public struct PlotZone: Identifiable, Sendable, Hashable {
+  public let id: String
+  public let label: String
+  public let lowerBound: Double?
+  public let upperBound: Double?
+
+  public init?(
+    id: String,
+    label: String,
+    lowerBound: Double? = nil,
+    upperBound: Double? = nil
+  ) {
+    guard lowerBound?.isFinite != false, upperBound?.isFinite != false else { return nil }
+    if let lowerBound, let upperBound, lowerBound >= upperBound { return nil }
+    self.id = id
+    self.label = label
+    self.lowerBound = lowerBound
+    self.upperBound = upperBound
+  }
+
+  public func contains(_ value: Double) -> Bool {
+    guard value.isFinite else { return false }
+    if let lowerBound, value < lowerBound { return false }
+    if let upperBound, value > upperBound { return false }
+    return true
+  }
+}
+
 public enum PlotAnnotation: Identifiable, Sendable, Hashable {
   case xRange(id: String, lowerBound: Double, upperBound: Double, label: String?)
   case xMarker(id: String, value: Double, label: String?)
@@ -133,6 +166,7 @@ public struct PlotScene: Sendable {
   public var xAxis: PlotAxis
   public var yAxis: PlotAxis
   public var series: [PlotSeries]
+  public var zones: [PlotZone]
   public var annotations: [PlotAnnotation]
   public var viewport: PlotViewport?
   public var accessibilityLabel: String
@@ -141,6 +175,7 @@ public struct PlotScene: Sendable {
     xAxis: PlotAxis = PlotAxis(),
     yAxis: PlotAxis = PlotAxis(),
     series: [PlotSeries],
+    zones: [PlotZone] = [],
     annotations: [PlotAnnotation] = [],
     viewport: PlotViewport? = nil,
     accessibilityLabel: String = "Graph"
@@ -148,6 +183,7 @@ public struct PlotScene: Sendable {
     self.xAxis = xAxis
     self.yAxis = yAxis
     self.series = series
+    self.zones = zones
     self.annotations = annotations
     self.viewport = viewport
     self.accessibilityLabel = accessibilityLabel

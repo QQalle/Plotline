@@ -19,6 +19,8 @@ The repository currently provides:
 - plot-rectangle clipping and extrema-preserving downsampling;
 - a native SwiftUI Canvas renderer;
 - multiple series, gaps, horizontal ranges, and vertical markers;
+- semantic Y-axis zones with per-zone trace colors and threshold guides;
+- independently configurable grids, borders, labels, titles, and Y-axis placement;
 - deterministic hit testing with nearest and interpolated selection;
 - drag scrubbing, crosshair rendering, optional selection bindings, and callbacks;
 - VoiceOver summaries, adjustable selection, and audio graph descriptors;
@@ -93,6 +95,30 @@ Set `isLive` to `true` to draw a pulsing dot and faint glow at the latest visibl
 point in each line or area series. The indicator becomes static when Reduce Motion
 is enabled. Its size, glow, and pulse timing can be customized with
 `PlotlineLiveIndicatorStyle` through `PlotlineStyle.liveIndicator`.
+
+### Zones and a quieter axis treatment
+
+Keep domain meaning in `PlotScene` and visual choices in `PlotlineStyle`. Open
+bounds let the first and last zones cover values outside the nominal training
+range without forcing the graph's automatic Y domain to expand.
+
+```swift
+let zones = [
+    PlotZone(id: "z1", label: "Z1", upperBound: 120)!,
+    PlotZone(id: "z2", label: "Z2", lowerBound: 120, upperBound: 140)!,
+    PlotZone(id: "z3", label: "Z3", lowerBound: 140)!
+]
+
+let scene = PlotScene(series: [heartRateSeries], zones: zones)
+let style = PlotlineStyle(
+    zoneColors: ["z1": .blue, "z2": .green, "z3": .orange],
+    gridVisibility: .none,
+    yAxisPosition: .trailing,
+    showsYAxisLabels: false,
+    showsAxisTitles: false,
+    showsZoneBoundaryLabels: true
+)
+```
 
 ## Design principles
 

@@ -3,6 +3,38 @@ import XCTest
 @testable import PlotlineCore
 
 final class PlotSceneTests: XCTestCase {
+  func testZonesSupportOpenBoundsAndRejectInvalidRanges() throws {
+    let z1 = try XCTUnwrap(PlotZone(id: "z1", label: "Z1", upperBound: 120))
+    let z5 = try XCTUnwrap(PlotZone(id: "z5", label: "Z5", lowerBound: 170))
+
+    XCTAssertTrue(z1.contains(80))
+    XCTAssertTrue(z1.contains(120))
+    XCTAssertFalse(z1.contains(121))
+    XCTAssertTrue(z5.contains(190))
+    XCTAssertFalse(z5.contains(169))
+    XCTAssertNil(PlotZone(id: "invalid", label: "Invalid", lowerBound: 150, upperBound: 150))
+    XCTAssertNil(PlotZone(id: "invalid", label: "Invalid", lowerBound: .infinity))
+  }
+
+  func testSceneKeepsZonesOutOfAutomaticDataDomain() throws {
+    let zone = try XCTUnwrap(
+      PlotZone(id: "z3", label: "Z3", lowerBound: 140, upperBound: 160))
+    let scene = PlotScene(
+      series: [
+        PlotSeries(
+          id: "heart-rate",
+          name: "Heart rate",
+          data: .line([PlotSample(x: 0, y: 130), PlotSample(x: 1, y: 150)])
+        )
+      ],
+      zones: [zone]
+    )
+
+    XCTAssertEqual(scene.zones, [zone])
+    XCTAssertEqual(scene.resolvedYDomain?.lowerBound, 130)
+    XCTAssertEqual(scene.resolvedYDomain?.upperBound, 150)
+  }
+
   func testAutomaticDomainsIgnoreGaps() {
     let scene = PlotScene(series: [
       PlotSeries(
